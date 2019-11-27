@@ -1,4 +1,4 @@
-/*	Author: 
+/*	Author: kmaka003
  *  Partner(s) Name: 
  *	Lab Section:
  *	Assignment: Lab #  Exercise #
@@ -16,6 +16,10 @@
 #include "simAVRHeader.h"
 #include <avr/interrupt.h>
 #endif
+
+#define ButtonA (~PINA & 0x01)
+#define ButtonB (~PINA & 0x02)
+#define ButtonC (~PINA & 0x04)
 
 // Easy Medium or Hard. 
 typedef struct _GameMode{
@@ -44,8 +48,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 3;
-Task tasks[3];
+unsigned char tasksSize = 2;
+Task tasks[2];
 
 
 volatile unsigned char TimerFlag = 0; //TimerISR() sets this to a 1. C programmer should clear to 0.
@@ -95,7 +99,6 @@ void TimerISR()
 			tasks[i].elapsedTime = 0;
 		}
 		tasks[i].elapsedTime += Period;
-	
 	}
 }
 
@@ -124,10 +127,8 @@ typedef enum GameStart_States {GameStart_init, GameStart_Wait, GameStart_Start, 
 int TickFct_PWMTick(int);
 typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
 
-//int TickFct_BombTick(int);
-//typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
-
-int TickFct_ButtonPress(int);
+int TickFct_BombTick(int);
+typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
 //-----------------------------------------------------------------------------------------
 //-----------------------------Global Vaiables---------------------------------------------
 unsigned char tempB;
@@ -135,11 +136,6 @@ unsigned char tempC;
 unsigned char tempD;
 unsigned char BombTick = 0;
 GameMode ChosenMode;
-unsigned char ButtonA = 0;
-unsigned char ButtonB = 0;
-unsigned char ButtonC = 0;
-
-
 
 //------------------------------------------------------------------------------------------
 
@@ -151,7 +147,7 @@ int main(void) {
 	DDRC = 0xFF; PORTD = 0x00; 
    /* Insert your solution below */
 	LCD_init();	
-	PWM_on();
+
 	//Easy.TimeAllowed = 0; 
 	//Easy.TimeOff = 0;
  
@@ -169,12 +165,7 @@ int main(void) {
 	tasks[i].elapsedTime = tasks[i].period;
 	tasks[i].TickFct = &TickFct_GameSart;
 	i++;
-	//Button Press	
-	tasks[i].state = 0;
-	tasks[i].period = 100;
-	tasks[i].elapsedTime = tasks[i].period;
-	tasks[i].TickFct = &TickFct_ButtonPress;
-	i++;
+
 	//PWMTick	
 	tasks[i].state = PWMTick_init;
 	tasks[i].period = 100;
@@ -183,16 +174,17 @@ int main(void) {
 	i++;
 
 	//BombTick	
-	//tasks[i].state = BombTick_init;
-	//tasks[i].period = 100;
-	//tasks[i].elapsedTime = tasks[i].period;
-	//tasks[i].TickFct = &TickFct_BombTick;
-	//i++;
+	tasks[i].state = BombTick_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_BombTick;
+	i++;
 
 
 	TimerSet(100);
 	TimerOn();
     while (1) {
+
     }
     return 1;
 }
@@ -200,7 +192,7 @@ int main(void) {
 //------------------------------GameStart SM---------------------------------
 unsigned char GameStart_timer = 0;
 GameMode ChosenMode_temp;
-unsigned char Game_Begin = 0;
+Game_Begin = 0;
 int TickFct_GameSart(int state){
 	switch (state){
 		case GameStart_init:
@@ -247,11 +239,12 @@ int TickFct_GameSart(int state){
 
 //-------------------------------------------------------------------------------------------
 //---------------------------PWM Ticks-------------------------------------------------------
-
 TickFct_PWMTick(int state){
+	unsigned char A0 = ~PINA & 0x01;
+	unsigned char A1 = (~PINA >> 1) & 0x01;
+	unsigned char A2 = (~PINA >> 2) & 0x01;
 	
-	
-	unsigned char Pressed = ButtonA + ButtonB + ButtonC;
+	unsigned char Pressed = A0 + A1 + A2;
 	if(!Game_Begin){
 		return state;
 	}
@@ -266,21 +259,20 @@ TickFct_PWMTick(int state){
 	}
 	switch (state){
 		case PWMTick_init:
+			set_PWM(0);
 			if(BombTick){
 				set_PWM(450);
 			}
-			else{
-				set_PWM(0);
-			}	
+				
 			break;
 		case PWMTick_Press:
 			if (Pressed > 1){ 
 				set_PWM(0);
 			}
-			else if(ButtonA){
+			else if(A0){
 				set_PWM(261.63);
 			}			
-			else if(ButtonB){
+			else if(A1){
 				set_PWM(293.66);
 			}
 			else{
@@ -294,7 +286,6 @@ TickFct_PWMTick(int state){
 
 //-------------------------------------------------------------------------------------------
 //---------------------------Bomb Ticks-------------------------------------------------------
-/*
 unsigned char BombTick_Timer = 0;
 unsigned char SetTick = 0;
 TickFct_BombTick(int state){
@@ -320,91 +311,10 @@ TickFct_BombTick(int state){
 			break;
 	}
 }
-*/
 //--------------------------------------------------------------------------------------------
-TickFct_ButtonPress(int state){
-	ButtonA = ~PINA & 0x01;
-	ButtonB = (~PINA & 0x02) >> 1;
-	ButtonC = (~PINA & 0x04) >> 2;
-	
-}
-
-//---------------------------------------------------------------------------------------
 
 
-//-----------------------------------7Seg Display----------------------------------------
-//---------------------------------------------------------------------------------------
 
-void WriteNumber(int Value){
-	unsigned char Hundrenth = 0;
-	unsigned char Tenth = 0;
-	unsigned char Ones = 0;
-	for(Value; Value > 99; Value - 100){
-		Hundreth++;
-	}
-	for(Value; Value > 9 && Value < 100; Value - 10){
-		Tenth++;
-	}
-	for(Value; Value > -1 && Value < 10; Value-- ){
-		Ones++;
-	}
-	Hundreth = NumberPatter(Hundreth);
-	Tenth = NumberPatter(Tenth);
-	Ones = NumberPatter(Ones);
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD & 0xC0
-	}
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD 1 0xC
-	}
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD & 0xC0
-	}
-	
-	
-}
-
-char NumberPattern(char LCD_Number){
-	if (LCD_Number == 0){
-		return 0b10000001;
-	} 	
-	else if(LCD_Numbre == 1){
-		return 0b10110111;
-	}	
-	else if (LCD_Number == 2){
-		return 0b11000010;
-	}
-	else if (LCD_Number == 3){
-		return 0b11001100;
-	}
-	else if (LCD_Number == 4){
-		return 0b10110100;
-	}
-	else if (LCD_Number == 5){
-		return 0b10011000;
-	}
-	else if (LCD_Number == 6){
-		return 0b1001000;
-	}
-	else if (LCD_Number == 7){
-		return 0b10110011;
-	}
-	else if (LCD_Number == 8){
-		return 0b10000000;
-	}
-	else if (LCD_Number == 9){
-		return 0b10010000;
-	}
-
-}		
-	
-//--------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------		
-		
-	
 
 
 
