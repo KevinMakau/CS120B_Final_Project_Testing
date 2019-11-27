@@ -16,10 +16,10 @@ void ADC_init (){
 	ADCSRA |= (1 << ADEN) | (1 <<  ADSC) | (1 << ADATE);
 }
 
-
+void SM_ ();
 void SM ();
-unsigned char tempB = 0x00;
-unsigned char tempD = 0x00;
+unsigned short tempADC = 0x00;
+unsigned short tempADC2 = 0x00;
 int main(void) {
     /* Insert DDR and PORT initializations */
         DDRA = 0x00; PORTA = 0xFF;
@@ -33,19 +33,36 @@ int main(void) {
     while (1) {
 	ADC_init();
 	SM();
+	SM_();
     }
     return 1;
 }
 
 void SM(){
-	ADMUX |= 0x04;
-	unsigned short tempADC = ADC;
+	ADC_init();
+	ADMUX = 0x04;
+	tempADC = ADC;
 	PORTD = 0x00;
-	if(tempADC > 700)
+	if(tempADC > 700){
 		PORTB = 0x01;
-	else if(tempADC < 400)
-		PORTB = 0x04;
-	else
+	}
+	else if(tempADC < 400){
 		PORTB = 0x02;
+	}
+	else{
+		PORTB = 0x00;
+	}
+	
+}
+void SM_(){
+	ADC_init();
+	ADMUX = 0x03;
+	tempADC2 = ADC;
+	if(tempADC2 > 700)
+		PORTB = 0x04;
+	else if(tempADC2 < 400)
+		PORTB = 0x08;
+	else
+		PORTB = 0x00;
 	
 }
