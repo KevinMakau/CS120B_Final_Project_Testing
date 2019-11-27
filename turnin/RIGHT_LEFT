@@ -38,18 +38,14 @@ int main(void) {
 }
 
 void SM(){
+	ADMUX |= 0x04;
 	unsigned short tempADC = ADC;
-	if (tempADC > 1007){
-		PORTD = 0x00;
+	PORTD = 0x00;
+	if(tempADC > 700)
 		PORTB = 0x01;
-	}
-	else if (tempADC > 1000){
-		PORTB = 0x03;
-		PORTD = 0x00;
-
-	}
-	else {
-		PORTD = 0xFF;
-		PORTB = 0x00;
-	}
+	else if(tempADC < 400)
+		PORTB = 0x04;
+	else
+		PORTB = 0x02;
+	
 }

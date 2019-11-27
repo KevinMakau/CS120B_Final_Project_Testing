@@ -8,12 +8,14 @@
  *	code, is my own original work.
  */
 #include <avr/io.h>
+#include "seven_seg.h"
 #ifdef _SIMULATE_
 #include "simAVRHeader.h"
 #endif
 
 void ADC_init (){
 	ADCSRA |= (1 << ADEN) | (1 <<  ADSC) | (1 << ADATE);
+	
 }
 
 
@@ -31,21 +33,25 @@ int main(void) {
     /* Insert your solution below */
 	
     while (1) {
-	ADC_init();
 	SM();
     }
     return 1;
 }
 
 void SM(){
-	ADMUX |= 0x04;
-	unsigned short tempADC = ADC;
+	int i = 0;
+	//PORTB = 0x00;
 	PORTD = 0x00;
-	if(tempADC > 700)
-		PORTB = 0x01;
-	else if(tempADC < 400)
-		PORTB = 0x04;
-	else
-		PORTB = 0x02;
+	PORTB = 0x01;
+	while (i < 1000){
+		i++;
+	}
+	PORTB = 0x00;
+	PORTD = 0xFE;	
+	PORTB = 0x02;
+	i = 0;
+	while (i < 1000){
+		i++;
+	}
 	
 }
