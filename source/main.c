@@ -44,8 +44,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 3;
-Task tasks[3];
+unsigned char tasksSize = 4;
+Task tasks[4];
 
 
 volatile unsigned char TimerFlag = 0; //TimerISR() sets this to a 1. C programmer should clear to 0.
@@ -128,8 +128,13 @@ typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
 //typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
 
 int TickFct_ButtonPress(int);
+
+int TickFct_GameClockTick(int);
+void WriteNumber(int);
+char NumberPattern(char);
 //-----------------------------------------------------------------------------------------
 //-----------------------------Global Vaiables---------------------------------------------
+unsigned short GameClock = 500;
 unsigned char tempB;
 unsigned char tempC;
 unsigned char tempD;
@@ -169,12 +174,21 @@ int main(void) {
 	tasks[i].elapsedTime = tasks[i].period;
 	tasks[i].TickFct = &TickFct_GameSart;
 	i++;
+
 	//Button Press	
 	tasks[i].state = 0;
 	tasks[i].period = 100;
 	tasks[i].elapsedTime = tasks[i].period;
 	tasks[i].TickFct = &TickFct_ButtonPress;
 	i++;
+
+	//GameClock	
+	tasks[i].state  = 0;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_GameClockTick;
+	i++;
+
 	//PWMTick	
 	tasks[i].state = PWMTick_init;
 	tasks[i].period = 100;
@@ -266,16 +280,11 @@ TickFct_PWMTick(int state){
 	}
 	switch (state){
 		case PWMTick_init:
-			if(BombTick){
-				set_PWM(450);
-			}
-			else{
-				set_PWM(0);
-			}	
+			set_PWM(1);	
 			break;
 		case PWMTick_Press:
 			if (Pressed > 1){ 
-				set_PWM(0);
+				set_PWM(1);
 			}
 			else if(ButtonA){
 				set_PWM(261.63);
@@ -334,36 +343,68 @@ TickFct_ButtonPress(int state){
 
 //-----------------------------------7Seg Display----------------------------------------
 //---------------------------------------------------------------------------------------
+unsigned char GameClocki = 0;
+int TickFct_GameClockTick(int state){
+	if(!Game_Begin){
+		return 0;
+	}
+	GameClocki++;
+	if (GameClocki > 10){
+		GameClocki = 0;
+		GameClock--;
+	}
+	WriteNumber(GameClock);
+
+}		
+			
 
 void WriteNumber(int Value){
-	unsigned char Hundrenth = 0;
+	unsigned char Hundreth = 0;
 	unsigned char Tenth = 0;
 	unsigned char Ones = 0;
-	for(Value; Value > 99; Value - 100){
+	while(Value > 99){
 		Hundreth++;
+		Value = Value - 100;
 	}
-	for(Value; Value > 9 && Value < 100; Value - 10){
+	for(Value = Value; Value > 9; Value = Value - 10){
 		Tenth++;
 	}
-	for(Value; Value > -1 && Value < 10; Value-- ){
+	for(Value = Value; Value > 0; Value-- ){
 		Ones++;
 	}
-	Hundreth = NumberPatter(Hundreth);
-	Tenth = NumberPatter(Tenth);
-	Ones = NumberPatter(Ones);
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD & 0xC0
-	}
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD 1 0xC
-	}
-	PORTD = PORTD & 0xC0
-	for(Value = 0; Value > 1000; Value++){
-		PORTD = PORTD & 0xC0
-	}
+	//LCD_Cursor(1);
+	//LCD_WriteData(Hundreth + '0');
+	//LCD_Cursor(2);
+	//LCD_WriteData(Tenth + '0');
+	//LCD_Cursor(3);
+	//LCD_WriteData(Ones + '0');
 	
+	Hundreth = NumberPattern(Hundreth);
+	Tenth = NumberPattern(Tenth);
+	Ones = NumberPattern(Ones);
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value > 1000; Value++){		
+		PORTD = PORTD | (Hundreth & 0x3F);
+		PORTB = PORTB | 0x04;
+		PORTB = PORTB | (Hundreth >> 6);
+	}
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value > 1000; Value++){
+
+		PORTD = PORTD | (Tenth & 0x3F);
+		PORTB = PORTB | 0x08;
+		PORTB = PORTB | (Tenth >> 6);
+	}
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value > 1000; Value++){
+		PORTD = PORTD | (Ones & 0x3F);
+		PORTB = PORTB | 0x10;
+		PORTB = PORTB | (Ones >> 6);
+	}
+
 	
 }
 
@@ -371,7 +412,7 @@ char NumberPattern(char LCD_Number){
 	if (LCD_Number == 0){
 		return 0b10000001;
 	} 	
-	else if(LCD_Numbre == 1){
+	else if(LCD_Number == 1){
 		return 0b10110111;
 	}	
 	else if (LCD_Number == 2){
