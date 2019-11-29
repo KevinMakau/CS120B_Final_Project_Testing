@@ -1,4 +1,4 @@
-/*	Author: kmaka003
+*	Author: 
  *  Partner(s) Name: 
  *	Lab Section:
  *	Assignment: Lab #  Exercise #
@@ -10,16 +10,12 @@
 
 
 #include <avr/io.h>
-#include "pwm.h"
 #include "io.h"
+#include "io.c"
 #ifdef _SIMULATE_
 #include "simAVRHeader.h"
 #include <avr/interrupt.h>
 #endif
-
-#define ButtonA (~PINA & 0x01)
-#define ButtonB (~PINA & 0x02)
-#define ButtonC (~PINA & 0x04)
 
 // Easy Medium or Hard. 
 typedef struct _GameMode{
@@ -48,9 +44,47 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 2;
-Task tasks[2];
+unsigned char tasksSize = 4;
+Task tasks[4];
 
+void set_PWM(double frequency){
+	static double current_frequency; // keeps track of the currently set frequency
+	//Will only update the registers when the frequency changes, otherwise allows
+	//music to play uninterrupted
+	
+	if(frequency != current_frequency)
+	{
+		if(!frequency) {TCCR1B &= 0x08;}//stops timer/counter
+		else {TCCR1B |= 0x03;} //resumes/continues timer/counter
+		
+		//prevents OCR3A from overflowing using prescaler 64
+		//0.954 is smallest frequency that will not result in overflow
+		if (frequency < 0.954) {OCR3A = 0xFFFF;}
+		
+		//prevents OCR3A from underflowing using prescaler 64
+		//31250 is largest frequency that will not result in underflow
+		if (frequency > 31250) {OCR3A = 0x0000;}
+		
+		else { OCR3A = (short) (8000000/(128*frequency))-1; }
+		
+		TCNT3 = 0; //resets counter
+		current_frequency = frequency; // updates the current frequency
+	}
+}
+
+void PWM_on(){
+	TCCR3A = (1 << COM3A0);
+	//COM3A0: Toggle PB3 on compare match between counter and OCR3A
+	TCCR3B = (1 << WGM32) | (1 << CS31) | (1 << CS30);
+	// wGM32: When counter (TCNT3) matches OCR3A, reset counter
+	//CS31 & CS30: Set a prescaler of 64
+	set_PWM(0);
+}
+
+void PWM_oFF (){
+	TCCR3A = 0x00;
+	TCCR3B = 0x00;
+}
 
 volatile unsigned char TimerFlag = 0; //TimerISR() sets this to a 1. C programmer should clear to 0.
 
@@ -99,6 +133,7 @@ void TimerISR()
 			tasks[i].elapsedTime = 0;
 		}
 		tasks[i].elapsedTime += Period;
+	
 	}
 }
 
@@ -122,20 +157,32 @@ void TimerSet(unsigned long M)
 //------------------------------------------------------------------------------------
 //----------------------------------TckFct & Enums//---------------------------------
 int TickFct_GameSart(int);
-typedef enum GameStart_States {GameStart_init, GameStart_Wait, GameStart_Start, GameStart_DeadState} GameStart_States;
+typedef enum GameStart_States {GameStart_init, GameStart_Wait, GameStart_Start, GameStart_DeadState, GameStart_Wait2} GameStart_States;
 
 int TickFct_PWMTick(int);
 typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
 
-int TickFct_BombTick(int);
-typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
+//int TickFct_BombTick(int);
+//typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
+
+int TickFct_ButtonPress(int);
+
+int TickFct_GameClockTick(int);
+void WriteNumber(int);
+char NumberPattern(char);
 //-----------------------------------------------------------------------------------------
 //-----------------------------Global Vaiables---------------------------------------------
+unsigned short GameClock = 500;
 unsigned char tempB;
 unsigned char tempC;
 unsigned char tempD;
 unsigned char BombTick = 0;
 GameMode ChosenMode;
+unsigned char ButtonA = 0;
+unsigned char ButtonB = 0;
+unsigned char ButtonC = 0;
+
+
 
 //------------------------------------------------------------------------------------------
 
@@ -147,7 +194,7 @@ int main(void) {
 	DDRC = 0xFF; PORTD = 0x00; 
    /* Insert your solution below */
 	LCD_init();	
-
+	PWM_on();
 	//Easy.TimeAllowed = 0; 
 	//Easy.TimeOff = 0;
  
@@ -166,6 +213,20 @@ int main(void) {
 	tasks[i].TickFct = &TickFct_GameSart;
 	i++;
 
+	//Button Press	
+	tasks[i].state = 0;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_ButtonPress;
+	i++;
+
+	//GameClock	
+	tasks[i].state  = 0;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_GameClockTick;
+	i++;
+
 	//PWMTick	
 	tasks[i].state = PWMTick_init;
 	tasks[i].period = 100;
@@ -174,17 +235,16 @@ int main(void) {
 	i++;
 
 	//BombTick	
-	tasks[i].state = BombTick_init;
-	tasks[i].period = 100;
-	tasks[i].elapsedTime = tasks[i].period;
-	tasks[i].TickFct = &TickFct_BombTick;
-	i++;
+	//tasks[i].state = BombTick_init;
+	//tasks[i].period = 100;
+	//tasks[i].elapsedTime = tasks[i].period;
+	//tasks[i].TickFct = &TickFct_BombTick;
+	//i++;
 
 
 	TimerSet(100);
 	TimerOn();
     while (1) {
-
     }
     return 1;
 }
@@ -192,7 +252,7 @@ int main(void) {
 //------------------------------GameStart SM---------------------------------
 unsigned char GameStart_timer = 0;
 GameMode ChosenMode_temp;
-Game_Begin = 0;
+unsigned char Game_Begin = 0;
 int TickFct_GameSart(int state){
 	switch (state){
 		case GameStart_init:
@@ -239,12 +299,11 @@ int TickFct_GameSart(int state){
 
 //-------------------------------------------------------------------------------------------
 //---------------------------PWM Ticks-------------------------------------------------------
+
 TickFct_PWMTick(int state){
-	unsigned char A0 = ~PINA & 0x01;
-	unsigned char A1 = (~PINA >> 1) & 0x01;
-	unsigned char A2 = (~PINA >> 2) & 0x01;
 	
-	unsigned char Pressed = A0 + A1 + A2;
+	
+	unsigned char Pressed = ButtonA + ButtonB + ButtonC;
 	if(!Game_Begin){
 		return state;
 	}
@@ -259,20 +318,16 @@ TickFct_PWMTick(int state){
 	}
 	switch (state){
 		case PWMTick_init:
-			set_PWM(0);
-			if(BombTick){
-				set_PWM(450);
-			}
-				
+			set_PWM(1);	
 			break;
 		case PWMTick_Press:
 			if (Pressed > 1){ 
-				set_PWM(0);
+				set_PWM(1);
 			}
-			else if(A0){
+			else if(ButtonA){
 				set_PWM(261.63);
 			}			
-			else if(A1){
+			else if(ButtonB){
 				set_PWM(293.66);
 			}
 			else{
@@ -286,13 +341,13 @@ TickFct_PWMTick(int state){
 
 //-------------------------------------------------------------------------------------------
 //---------------------------Bomb Ticks-------------------------------------------------------
+/*
 unsigned char BombTick_Timer = 0;
 unsigned char SetTick = 0;
 TickFct_BombTick(int state){
 	if(!Game_Begin){
 		return state;
 	}
-
 	switch (state){
 		case BombTick_init:
 			state = BombTick_Timer > 10? BombTick_Tick: BombTick_init;
@@ -311,10 +366,122 @@ TickFct_BombTick(int state){
 			break;
 	}
 }
+*/
 //--------------------------------------------------------------------------------------------
+TickFct_ButtonPress(int state){
+	ButtonA = ~PINA & 0x01;
+	ButtonB = (~PINA & 0x02) >> 1;
+	ButtonC = (~PINA & 0x04) >> 2;
+	
+}
+
+//---------------------------------------------------------------------------------------
 
 
+//-----------------------------------7Seg Display----------------------------------------
+//---------------------------------------------------------------------------------------
+unsigned char GameClocki = 0;
+int TickFct_GameClockTick(int state){
+	if(!Game_Begin){
+		return 0;
+	}
+	GameClocki++;
+	if (GameClocki > 10){
+		GameClocki = 0;
+		GameClock--;
+	}
+	WriteNumber(GameClock);
 
+}		
+			
+
+void WriteNumber(int Value){
+	unsigned char Hundreth = 0;
+	unsigned char Tenth = 0;
+	unsigned char Ones = 0;
+	while(Value > 99){
+		Hundreth++;
+		Value = Value - 100;
+	}
+	for(Value = Value; Value > 9; Value = Value - 10){
+		Tenth++;
+	}
+	for(Value = Value; Value > 0; Value-- ){
+		Ones++;
+	}
+	//LCD_Cursor(1);
+	//LCD_WriteData(Hundreth + '0');
+	//LCD_Cursor(2);
+	//LCD_WriteData(Tenth + '0');
+	//LCD_Cursor(3);
+	//LCD_WriteData(Ones + '0');
+	
+	Hundreth = NumberPattern(Hundreth);
+	Tenth = NumberPattern(Tenth);
+	Ones = NumberPattern(Ones);
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value < 1000; Value++){		
+		PORTD = PORTD | (Hundreth & 0x3F);
+		PORTB = PORTB | 0x10;
+		PORTB = PORTB | (Hundreth >> 6);
+	}
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value < 1000; Value++){
+
+		PORTD = PORTD | (Tenth & 0x3F);
+		PORTB = PORTB | 0x08;
+		PORTB = PORTB | (Tenth >> 6);
+	}
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
+	for(Value = 0; Value < 1000; Value++){
+		PORTD = PORTD | (Ones & 0x3F);
+		PORTB = PORTB | 0x04;
+		PORTB = PORTB | (Ones >> 6);
+	}
+
+	
+}
+
+char NumberPattern(char LCD_Number){
+	if (LCD_Number == 0){
+		return 0b10000001;
+	} 	
+	else if(LCD_Number == 1){
+		return 0b10110111;
+	}	
+	else if (LCD_Number == 2){
+		return 0b11000010;
+	}
+	else if (LCD_Number == 3){
+		return 0b11001100;
+	}
+	else if (LCD_Number == 4){
+		return 0b10110100;
+	}
+	else if (LCD_Number == 5){
+		return 0b10011000;
+	}
+	else if (LCD_Number == 6){
+		return 0b1001000;
+	}
+	else if (LCD_Number == 7){
+		return 0b10110011;
+	}
+	else if (LCD_Number == 8){
+		return 0b10000000;
+	}
+	else if (LCD_Number == 9){
+		return 0b10010000;
+	}
+
+}		
+	
+//--------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------		
+		
 
 
 
