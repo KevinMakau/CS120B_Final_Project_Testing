@@ -1,4 +1,4 @@
-*	Author: 
+/*	Author: 
  *  Partner(s) Name: 
  *	Lab Section:
  *	Assignment: Lab #  Exercise #
@@ -44,8 +44,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 4;
-Task tasks[4];
+unsigned char tasksSize = 5;
+Task tasks[5];
 
 void set_PWM(double frequency){
 	static double current_frequency; // keeps track of the currently set frequency
@@ -165,6 +165,9 @@ typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
 //int TickFct_BombTick(int);
 //typedef enum BombTick_States {BombTick_init, BombTick_Tick} BombTick_States;
 
+int TickFct_Questions(int);
+typedef enum Questions_States {Questions_init, Questions_wait, Questions_Answer, Questions_Check, Questions_Over, Questions_waitS} Questions_States;
+
 int TickFct_ButtonPress(int);
 
 int TickFct_GameClockTick(int);
@@ -189,7 +192,7 @@ unsigned char ButtonC = 0;
 int main(void) {
     /* Insert DDR and PORT initializations */
 	DDRA = 0x00; PINA = 0xFF;
-	DDRB = 0xFF; PINB = 0x00;
+	DDRB = 0xFF; PORTB = 0x00;
 	DDRD = 0xFF; PORTD = 0x00;
 	DDRC = 0xFF; PORTD = 0x00; 
    /* Insert your solution below */
@@ -240,7 +243,12 @@ int main(void) {
 	//tasks[i].elapsedTime = tasks[i].period;
 	//tasks[i].TickFct = &TickFct_BombTick;
 	//i++;
-
+	
+	tasks[i].state = Questions_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Questions;
+	i++;
 
 	TimerSet(100);
 	TimerOn();
@@ -281,7 +289,7 @@ int TickFct_GameSart(int state){
 			break;
 		case GameStart_Wait:
 			GameStart_timer++;
-			LCD_DisplayString(1, "BombCode:       BM7L1");
+			LCD_DisplayString(1, "BombCode:       6M47L1");
 			break;
 		case GameStart_Start:
 			LCD_ClearScreen();
@@ -421,27 +429,28 @@ void WriteNumber(int Value){
 	Ones = NumberPattern(Ones);
 	PORTD = PORTD & 0xC0;
 	PORTB = PORTB & 0xC0;
-	for(Value = 0; Value < 1000; Value++){		
+	for(Value = 0; Value < 10000; Value++){		
 		PORTD = PORTD | (Hundreth & 0x3F);
-		PORTB = PORTB | 0x10;
+		PORTB = PORTB | 0x20;
 		PORTB = PORTB | (Hundreth >> 6);
 	}
 	PORTD = PORTD & 0xC0;
 	PORTB = PORTB & 0xC0;
-	for(Value = 0; Value < 1000; Value++){
+	for(Value = 0; Value < 10000; Value++){
 
 		PORTD = PORTD | (Tenth & 0x3F);
-		PORTB = PORTB | 0x08;
+		PORTB = PORTB | 0x10;
 		PORTB = PORTB | (Tenth >> 6);
 	}
 	PORTD = PORTD & 0xC0;
 	PORTB = PORTB & 0xC0;
-	for(Value = 0; Value < 1000; Value++){
+	for(Value = 0; Value < 10000; Value++){
 		PORTD = PORTD | (Ones & 0x3F);
-		PORTB = PORTB | 0x04;
+		PORTB = PORTB | 0x08;
 		PORTB = PORTB | (Ones >> 6);
 	}
-
+	PORTD = PORTD & 0xC0;
+	PORTB = PORTB & 0xC0;
 	
 }
 
@@ -456,16 +465,16 @@ char NumberPattern(char LCD_Number){
 		return 0b11000010;
 	}
 	else if (LCD_Number == 3){
-		return 0b11001100;
+		return 0b10100010;
 	}
 	else if (LCD_Number == 4){
 		return 0b10110100;
 	}
 	else if (LCD_Number == 5){
-		return 0b10011000;
+		return 0b10101000;
 	}
 	else if (LCD_Number == 6){
-		return 0b1001000;
+		return 0b10001000;
 	}
 	else if (LCD_Number == 7){
 		return 0b10110011;
@@ -474,14 +483,74 @@ char NumberPattern(char LCD_Number){
 		return 0b10000000;
 	}
 	else if (LCD_Number == 9){
-		return 0b10010000;
+		return 0b10100000;
 	}
 
 }		
 	
 //--------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------		
+//--------------------------------------------------------------------------------------
+
+//========================================Game Logic====================================
+//--------------------------------------------------------------------------------------
+
+
+//----------------------------------------3Questions-------------------------------------
+//-------------------------------------------------------------------------------------
+unsigned char Questions_clock = 0;
+unsigned char Q_Over = 0;
+int TickFct_Questions(int state){
+	if(!Game_Begin | Q_Over){
+		return state;
+	}
+	
+	switch (state){
+		case Questions_init:
+			LCD_DisplayString(1, "Character 3 On   the Bomb Code");
+			state = Questions_wait;
+			break;
+		case Questions_wait:
+			state = Questions_clock > 15? Questions_Answer: Questions_wait;
+			break;
+		case Questions_Answer:
+			state = Questions_Check;
+			break;
+		case Questions_Check:
+			state = ButtonA? Questions_Over: Questions_Check;
+			break;
+		case Questions_Over:
+			state = Questions_Over;
+			break;
+		case Questions_waitS:
+			state = Questions_clock > 7? Questions_init: Questions_waitS;
+	}
+	switch (state){
+		case Questions_init:
+			break;
+		case Questions_wait:
+			Questions_clock++;
+			break;
+		case Questions_waitS:
+			Questions_clock++;
+			break;	
+		case Questions_Answer:
+			LCD_DisplayString(1, "A: M    B: J    C: 4");
+			break;
+		case Questions_Check:
+			if(ButtonB | ButtonC){
+				LCD_DisplayString(1, "ERROR!!!");
+				GameClock = GameClock - 10;
+				state = Questions_waitS;
+				Questions_clock = 0;
+			}
+			break;
 		
+		case Questions_Over:
+			Q_Over = 1;
+			break;
+	}		 
+	return state;
+}
 
 
 
