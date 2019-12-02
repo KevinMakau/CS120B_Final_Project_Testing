@@ -160,7 +160,7 @@ void ADC_init (){
 
 char ADC_X(){
 	ADC_init();
-	ADMUX = 0x08;
+	ADMUX |= 0x03;
 	if(ADC > 700){
 		return 1;
 	}
@@ -790,12 +790,12 @@ int TickFct_Mary(int state){
 
 //--------------------------------------------------JOYSTICK--------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------------------
-unsigned char Joystick_Array[13] = {2, 1, 2, 2, 1, 2};
+unsigned char Joystick_Array[6] = {2, 1, 2, 2, 1, 2};
 unsigned char Joystick_clock = 0;
 unsigned char J_Over = 0;
 unsigned char Joystick_i = 0;
 int TickFct_Joystick(int state){
-	if(!Game_Begin | !Mary_Over | J_Over){
+	if(!Game_Begin | !M_Over | J_Over){
 		return state;
 	}
 	unsigned char Moved = ADC_X();
@@ -835,12 +835,12 @@ int TickFct_Joystick(int state){
 		case Joystick_Answer:
 			break;
 		case Joystick_Check:
-			if(Moved == Joystick_Array[Mary_i]){
+			if(Moved == Joystick_Array[Joystick_i]){
 				Joystick_i++;
 			}
 			else{
 				LCD_DisplayString(1, "Error!!!");
-				Mary_i = 0;
+				Joystick_i = 0;
 				GameClock = GameClock - 10;
 				state = Joystick_waitS;
 				Joystick_clock = 0;
