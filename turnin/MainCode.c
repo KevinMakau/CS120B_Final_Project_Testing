@@ -44,8 +44,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 8;
-Task tasks[8];
+unsigned char tasksSize = 9;
+Task tasks[9];
 
 void set_PWM(double frequency){
 	static double current_frequency; // keeps track of the currently set frequency
@@ -154,6 +154,24 @@ void TimerSet(unsigned long M)
 	_avr_timer_cntcurr = _avr_timer_M;
 }
 
+void ADC_init (){
+	ADCSRA |= (1 << ADEN) | (1 <<  ADSC) | (1 << ADATE);
+}
+
+char ADC_X(){
+	ADC_init();
+	ADMUX |= 0x03;
+	if(ADC > 700){
+		return 1;
+	}
+	else if(ADC < 400){
+		return 2;
+	}
+	else{
+		return 0;
+	}
+}
+
 //------------------------------------------------------------------------------------
 //----------------------------------TckFct & Enums//---------------------------------
 int TickFct_GameSart(int);
@@ -178,6 +196,18 @@ int TickFct_Mary(int);
 typedef enum Mary_States {Mary_init, Mary_wait, Mary_Answer, Mary_Check, Mary_Over, Mary_waitS} Mary_States;
 
 
+int TickFct_Joystick(int);
+typedef enum Joystick_States {Joystick_init, Joystick_wait, Joystick_Answer, Joystick_Check, Joystick_Over, Joystick_waitS} Joystick_States;
+	
+int TickFct_GameOver(int);
+typedef enum GameOver_States {GameOver_init, GameOver_wait, GameOver_HighScore, GameOver_Reset} GameOver_States;
+
+int TickFct_Lost(int);
+
+int TickFct_Reset(int);
+typedef enum Reset_States {Reset_init, Reset_wait, Reset_Reset} Reset_States;
+
+
 int TickFct_ButtonPress(int);
 
 int TickFct_GameClockTick(int);
@@ -186,14 +216,16 @@ char NumberPattern(char);
 //-----------------------------------------------------------------------------------------
 //-----------------------------Global Vaiables---------------------------------------------
 unsigned short GameClock = 500;
-unsigned char tempB;
-unsigned char tempC;
-unsigned char tempD;
+unsigned char Game_Won = 0;
+unsigned char Reset = 0;
 unsigned char BombTick = 0;
 GameMode ChosenMode;
 unsigned char ButtonA = 0;
 unsigned char ButtonB = 0;
 unsigned char ButtonC = 0;
+unsigned char ButtonD = 0;
+unsigned char Game_Lost = 0;
+unsigned char HighScore = 0;
 
 
 
@@ -281,6 +313,34 @@ int main(void) {
 	tasks[i].elapsedTime = tasks[i].period;
 	tasks[i].TickFct = &TickFct_Mary;
 	i++;
+	
+	//Joystick init
+	tasks[i].state = Joystick_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Joystick;
+	i++;
+	
+	//Game Over
+	tasks[i].state = GameOver_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_GameOver;
+	i++;
+	
+	//Reset
+	tasks[i].state = Reset_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Reset;
+	i++;
+	
+	//Game Lost
+	tasks[i].state = 0;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Lost;
+	i++;
 
 	TimerSet(100);
 	TimerOn();
@@ -294,6 +354,9 @@ unsigned char GameStart_timer = 0;
 GameMode ChosenMode_temp;
 unsigned char Game_Begin = 0;
 int TickFct_GameSart(int state){
+	if(Game_Begin){
+		return state;
+	}
 	switch (state){
 		case GameStart_init:
 			state = ButtonA? GameStart_Wait: GameStart_init;
@@ -327,6 +390,8 @@ int TickFct_GameSart(int state){
 			LCD_ClearScreen();
 			ChosenMode = ChosenMode_temp;
 			Game_Begin = 1;
+			state = GameStart_init;
+			GameStart_timer = 0;
 			break;
 		case GameStart_DeadState:		
 			break;
@@ -412,7 +477,8 @@ TickFct_ButtonPress(int state){
 	ButtonA = ~PINA & 0x01;
 	ButtonB = ~PINA & 0x02;
 	ButtonC = ~PINA & 0x04;
-	
+	ButtonD = ~PINA & 0x10;
+
 }
 
 //---------------------------------------------------------------------------------------
@@ -579,6 +645,8 @@ int TickFct_Questions(int state){
 		
 		case Questions_Over:
 			Q_Over = 1;
+			Questions_clock = 0;
+			state = Questions_init;
 			break;
 	}		 
 	return state;
@@ -633,6 +701,8 @@ int TickFct_Questions_two(int state){
 		break;
 		case Questions_Over_two:
 			Q_Over_two = 1;
+			Questions_clock_two = 0;
+			state = Questions_init_two;
 			break;
 	}
 	return state;
@@ -689,6 +759,8 @@ int TickFct_Questions_three(int state){
 		
 		case Questions_Over_three:
 			Q_Over_three = 1;
+			Questions_clock_three = 0;
+			state = Questions_init_three;
 			break;
 	}
 	return state;
@@ -752,9 +824,174 @@ int TickFct_Mary(int state){
 			}
 			break;
 		case Mary_Over:
-			LCD_WriteData(Mary_i + '0');
+			Mary_clock = 0;
+			Mary_i = 0;
 			M_Over = 1;
+			Game_Won = 1;
 			break;
+	}
+	return state;
+}
+
+//--------------------------------------------------JOYSTICK--------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------
+unsigned char Joystick_Array[6] = {2, 1, 2, 2, 1, 2};
+unsigned char Joystick_clock = 0;
+unsigned char J_Over = 0;
+unsigned char Joystick_i = 0;
+int TickFct_Joystick(int state){
+	if(!Game_Begin | !M_Over | J_Over){
+		return state;
+	}
+	unsigned char Moved = ADC_X();
+	
+	switch (state){
+		case Joystick_init:
+			LCD_DisplayString(1, "Left Right Left Left Right Left");
+			state = Joystick_clock < 5? Joystick_init: Joystick_Answer;
+			break;
+		case Joystick_Answer:
+			Joystick_clock = 0; 
+			LCD_ClearScreen();
+			state = Moved? Joystick_Check: Joystick_Answer;
+			break;
+		case Joystick_Check:
+			state = Joystick_wait;
+			break;
+		case Joystick_wait:
+			state = Moved? Joystick_wait: Joystick_Answer;
+			state = Joystick_i > 5? Joystick_Over: state;
+			break;
+		case Joystick_Over:
+			state = Joystick_Over;
+			break;
+		case Joystick_waitS:
+			state = Joystick_clock > 7? Joystick_init: Joystick_waitS;
+	}	
+	switch (state){
+		case Joystick_init:
+			Joystick_clock++;
+			break;
+		case Joystick_wait:
+			break;
+		case Joystick_waitS:
+			Joystick_clock++;
+			break;
+		case Joystick_Answer:
+			break;
+		case Joystick_Check:
+			if(Moved == Joystick_Array[Joystick_i]){
+				Joystick_i++;
+			}
+			else{
+				LCD_DisplayString(1, "Error!!!");
+				Joystick_i = 0;
+				GameClock = GameClock - 10;
+				state = Joystick_waitS;
+				Joystick_clock = 0;
+			}
+			break;
+		case Joystick_Over:
+			Joystick_clock = 0;
+			Joystick_i = 0;
+			J_Over = 1;
+			break;
+	}
+	return state;
+}
+
+unsigned char GameOver_clock = 0;
+unsigned char Game_Over = 0;
+int TickFct_GameOver(int state){
+	if(!Game_Begin | Game_Over){
+		return state;
+	}
+	switch(state){
+		case GameOver_init:
+			if(Game_Won){
+				LCD_DisplayString(1, "Game Won");		
+			}
+			else if(Reset){
+				LCD(1, "Game Reset");
+			}
+			else{
+				LCD_DisplayString(1, "Game Lost");
+			}
+			state = GameOver_clock > 15? GameOver_HighScore: GameOver_init;
+			break;
+		case GameOver_HighScore:
+			if(GameClock > HighScore && !Reset){
+				state = GameOver_wait;
+			}
+			else{
+				state = GameOver_Reset;
+			}
+		case GameOver_wait:
+			state = GameOver_clock > 15? GameOver_Reset: GameOver_wait;
+			break;
+		case GameOver_Reset:
+			state = GameOver_init;
+			break;
+		}
+		switch(state){
+			case GameOver_init:
+			break;
+			case GameOver_HighScore:
+				GameOver_clock = 0;
+			break;
+			case GameOver_wait:
+				GameOver_clock++;
+			break;
+			case GameOver_Reset:
+				Q_Over_three = 0;
+				Q_Over_two = 0;
+				Q_Over = 0;
+				M_Over = 0;
+				J_Over = 0;
+				GameClock = 500;
+				Game_Begin = 0;
+				Game_Over = 0;
+				GameOver_clock = 0;
+				Game_Won = 0; 
+				Reset = 0;
+				break;
+		}
+}
+
+unsigned char Reset_Clock = 0;
+int TickFct_Reset(int state){
+	switch(state){
+		case Reset_init:
+			state = ButtonD? Reset_wait: Reset_init;
+			break;
+		case Reset_wait:
+			state = ButtonD? Reset_wait: Reset_init;
+			state = Reset_Clock > 30? Reset_Reset: state;
+			break;
+		case Reset_Reset:
+			state = Reset_init;
+			break; 
+	}
+	switch(state){
+		case Reset_init:
+			break;
+		case Reset_wait:
+			Reset_Clock++;
+			break;		
+		case Reset_Reset:
+			Reset = 1;
+			Reset_Clock = 0;
+			break;
+	}
+	
+	
+}
+
+
+
+int TickFct_Lost(int state){
+	if(GameClock == 0){
+		Game_Lost = 1;
 	}
 	return state;
 }
