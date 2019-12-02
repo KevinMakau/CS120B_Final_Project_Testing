@@ -44,8 +44,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 5;
-Task tasks[5];
+unsigned char tasksSize = 8;
+Task tasks[8];
 
 void set_PWM(double frequency){
 	static double current_frequency; // keeps track of the currently set frequency
@@ -167,6 +167,16 @@ typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
 
 int TickFct_Questions(int);
 typedef enum Questions_States {Questions_init, Questions_wait, Questions_Answer, Questions_Check, Questions_Over, Questions_waitS} Questions_States;
+	
+int TickFct_Questions_two(int);
+typedef enum Questions_States_two {Questions_init_two, Questions_wait_two, Questions_Answer_two, Questions_Check_two, Questions_Over_two, Questions_waitS_two} Questions_States_two;
+
+int TickFct_Questions_three(int);
+typedef enum Questions_States_three {Questions_init_three, Questions_wait_three, Questions_Answer_three, Questions_Check_three, Questions_Over_three, Questions_waitS_three} Questions_States_three;
+
+int TickFct_Mary(int);
+typedef enum Mary_States {Mary_init, Mary_wait, Mary_Answer, Mary_Check, Mary_Over, Mary_waitS} Mary_States;
+
 
 int TickFct_ButtonPress(int);
 
@@ -244,10 +254,32 @@ int main(void) {
 	//tasks[i].TickFct = &TickFct_BombTick;
 	//i++;
 	
+	//Question1
 	tasks[i].state = Questions_init;
 	tasks[i].period = 100;
 	tasks[i].elapsedTime = tasks[i].period;
 	tasks[i].TickFct = &TickFct_Questions;
+	i++;
+	
+	//Question2
+	tasks[i].state = Questions_init_two;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Questions_two;
+	i++;
+	
+	//Question3
+	tasks[i].state = Questions_init_three;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Questions_three;
+	i++;
+	
+	//Mary Had a little lamb
+	tasks[i].state = Mary_init;
+	tasks[i].period = 100;
+	tasks[i].elapsedTime = tasks[i].period;
+	tasks[i].TickFct = &TickFct_Mary;
 	i++;
 
 	TimerSet(100);
@@ -264,13 +296,13 @@ unsigned char Game_Begin = 0;
 int TickFct_GameSart(int state){
 	switch (state){
 		case GameStart_init:
-			state = ButtonA || ButtonB? GameStart_Wait: GameStart_init;
-			if(ButtonA){
+			state = ButtonA? GameStart_Wait: GameStart_init;
+			/*if(ButtonA){
 				ChosenMode_temp = Easy;
 			}
 			else if(ButtonB){
 				ChosenMode_temp = Medium;
-			}
+			}*/
 				
 			break;
 		case GameStart_Wait:
@@ -285,11 +317,11 @@ int TickFct_GameSart(int state){
 	}
 	switch (state){
 		case GameStart_init:
-			LCD_DisplayString(1, "Choose Moode      Easy=A/Hard=B");
+			LCD_DisplayString(1, "Defuse the bomb A to start");
 			break;
 		case GameStart_Wait:
 			GameStart_timer++;
-			LCD_DisplayString(1, "BombCode:       6M47L1");
+			LCD_DisplayString(1, "BombCode:       Black:6M47L1");
 			break;
 		case GameStart_Start:
 			LCD_ClearScreen();
@@ -329,7 +361,7 @@ TickFct_PWMTick(int state){
 			set_PWM(1);	
 			break;
 		case PWMTick_Press:
-			if (Pressed > 1){ 
+			if (ButtonA && ButtonB || ButtonA && ButtonC || ButtonB && ButtonC){ 
 				set_PWM(1);
 			}
 			else if(ButtonA){
@@ -378,8 +410,8 @@ TickFct_BombTick(int state){
 //--------------------------------------------------------------------------------------------
 TickFct_ButtonPress(int state){
 	ButtonA = ~PINA & 0x01;
-	ButtonB = (~PINA & 0x02) >> 1;
-	ButtonC = (~PINA & 0x04) >> 2;
+	ButtonB = ~PINA & 0x02;
+	ButtonC = ~PINA & 0x04;
 	
 }
 
@@ -506,7 +538,7 @@ int TickFct_Questions(int state){
 	
 	switch (state){
 		case Questions_init:
-			LCD_DisplayString(1, "Character 3 On   the Bomb Code");
+			LCD_DisplayString(1, "Character 3 On  the Bomb Code");
 			state = Questions_wait;
 			break;
 		case Questions_wait:
@@ -552,10 +584,177 @@ int TickFct_Questions(int state){
 	return state;
 }
 
-
-
-
-
-
-
+unsigned char Questions_clock_two = 0;
+unsigned char Q_Over_two = 0;
+int TickFct_Questions_two(int state){
+	if(!Q_Over | Q_Over_two | !Game_Begin){
+		return state;
+	}
 	
+	switch (state){
+		case Questions_init_two:
+			LCD_DisplayString(1, "Cut a wire");
+			state = Questions_wait_two;
+			break;
+		case Questions_wait_two:
+			state = Questions_clock_two > 8? Questions_Answer_two: Questions_wait_two;
+			break;
+		case Questions_Answer_two:
+			state = Questions_Check_two;
+			break;
+		case Questions_Check_two:
+			state = ButtonB? Questions_Over_two: Questions_Check_two;
+			break;
+		case Questions_Over_two:
+			state = Questions_Over_two;
+			break;
+		case Questions_waitS_two:
+			state = Questions_clock_two > 7? Questions_init_two: Questions_waitS_two;
+	}
+	switch (state){
+		case Questions_init_two:
+			break;
+		case Questions_wait_two:
+			Questions_clock_two++;
+			break;
+		case Questions_waitS_two:
+			Questions_clock_two++;
+			break;
+		case Questions_Answer_two:
+			LCD_DisplayString(1, "A: Red  B: BlackC: Green");
+			break;
+		case Questions_Check_two:
+			if(ButtonA | ButtonC){
+				LCD_DisplayString(1, "ERROR!!!");
+				GameClock = GameClock - 10;
+				state = Questions_waitS_two;
+				Questions_clock_two = 0;
+		}
+		break;
+		case Questions_Over_two:
+			Q_Over_two = 1;
+			break;
+	}
+	return state;
+}
+
+
+unsigned char Questions_clock_three = 0;
+unsigned char Q_Over_three = 0;
+int TickFct_Questions_three(int state){
+	if(!Game_Begin | Q_Over_three | !Q_Over_two){
+		return state;
+	}
+	
+	switch (state){
+		case Questions_init_three:
+			LCD_DisplayString(1, "The Other button");
+			state = Questions_wait_three;
+			break;
+		case Questions_wait_three:
+			state = Questions_clock_three > 10? Questions_Answer_three: Questions_wait_three;
+			break;
+		case Questions_Answer_three:
+			state = Questions_Check_three;
+			break;
+		case Questions_Check_three:
+			state = ButtonC? Questions_Over_three: Questions_Check_three;
+			break;
+		case Questions_Over_three:
+			state = Questions_Over_three;
+			break;
+		case Questions_waitS:
+			state = Questions_clock_three > 7? Questions_init_three: Questions_waitS_three;
+	}
+	switch (state){
+		case Questions_init_three:
+			break;
+		case Questions_wait_three:
+			Questions_clock_three++;
+		break;
+			case Questions_waitS_three:
+			Questions_clock_three++;
+			break;
+		case Questions_Answer_three:
+			LCD_DisplayString(1, "A: A    B: B    C: C");
+			break;
+		case Questions_Check_three:
+			if(ButtonB | ButtonA){
+				LCD_DisplayString(1, "ERROR!!!");
+				GameClock = GameClock - 10;
+				state = Questions_waitS_three;
+				Questions_clock_three = 0;
+			}
+			break;
+		
+		case Questions_Over_three:
+			Q_Over_three = 1;
+			break;
+	}
+	return state;
+}
+
+//------------------------------------------------------Mary Had a Little Lamb-----------------------------------------
+//---------------------------------------------------------------------------------------------------------------------
+
+unsigned char Mary_Array[13] = {4, 2, 1, 2, 4, 4, 4, 2, 2, 2, 4, 4, 4};
+unsigned char Mary_clock = 0;
+unsigned char M_Over = 0;
+unsigned char Mary_i = 0;
+int TickFct_Mary(int state){
+	unsigned char Pressed = ButtonA + ButtonB + ButtonC;
+	if(!Game_Begin | !Q_Over_three | M_Over){
+		return state;
+	}
+	switch (state){
+		case Mary_init:
+			LCD_DisplayString(1, "What did Mary   Have");
+			state = Pressed? Mary_init: Mary_Answer;
+			break;
+		case Mary_Answer:
+			state = Pressed? Mary_Check: Mary_Answer;
+			break;
+		case Mary_Check:
+			state = Mary_wait;
+			break;
+		case Mary_wait:
+			state = Pressed? Mary_wait: Mary_Answer;
+			state = Mary_i > 12? Mary_Over: state;
+			break;
+		case Mary_Over:
+			state = Mary_Over;
+			break;
+		case Mary_waitS:
+			state = Mary_clock > 7? Mary_init: Mary_waitS;
+	}
+	switch (state){
+		case Mary_init:
+			break;
+		case Mary_wait:
+			break;
+		case Mary_waitS:
+			Mary_clock++;
+			break;
+		case Mary_Answer:
+			break;
+		case Mary_Check:
+			if(ButtonA && ButtonB || ButtonA && ButtonC || ButtonB && ButtonC){
+			 break;
+			}
+			if(Pressed == Mary_Array[Mary_i]){
+				Mary_i++;
+			}
+			else{
+				LCD_DisplayString(1, "Error!!!");
+				GameClock = GameClock - 10;
+				state = Mary_waitS;
+				Mary_clock = 0;
+			}
+			break;
+		case Mary_Over:
+			LCD_WriteData(Mary_i + '0');
+			M_Over = 1;
+			break;
+	}
+	return state;
+}
