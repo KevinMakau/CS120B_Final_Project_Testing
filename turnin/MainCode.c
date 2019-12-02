@@ -44,8 +44,8 @@ typedef struct _Task{
 } Task;
 
 
-unsigned char tasksSize = 9;
-Task tasks[9];
+unsigned char tasksSize = 12;
+Task tasks[12];
 
 void set_PWM(double frequency){
 	static double current_frequency; // keeps track of the currently set frequency
@@ -199,7 +199,7 @@ typedef enum Mary_States {Mary_init, Mary_wait, Mary_Answer, Mary_Check, Mary_Ov
 int TickFct_Joystick(int);
 typedef enum Joystick_States {Joystick_init, Joystick_wait, Joystick_Answer, Joystick_Check, Joystick_Over, Joystick_waitS} Joystick_States;
 	
-int TickFct_GameOver(int);
+int TickFct_GameEnd(int);
 typedef enum GameOver_States {GameOver_init, GameOver_wait, GameOver_HighScore, GameOver_Reset} GameOver_States;
 
 int TickFct_Lost(int);
@@ -226,6 +226,7 @@ unsigned char ButtonC = 0;
 unsigned char ButtonD = 0;
 unsigned char Game_Lost = 0;
 unsigned char HighScore = 0;
+unsigned char Game_Over = 0;
 
 
 
@@ -314,6 +315,7 @@ int main(void) {
 	tasks[i].TickFct = &TickFct_Mary;
 	i++;
 	
+	
 	//Joystick init
 	tasks[i].state = Joystick_init;
 	tasks[i].period = 100;
@@ -325,7 +327,7 @@ int main(void) {
 	tasks[i].state = GameOver_init;
 	tasks[i].period = 100;
 	tasks[i].elapsedTime = tasks[i].period;
-	tasks[i].TickFct = &TickFct_GameOver;
+	tasks[i].TickFct = &TickFct_GameEnd;
 	i++;
 	
 	//Reset
@@ -488,7 +490,7 @@ TickFct_ButtonPress(int state){
 //---------------------------------------------------------------------------------------
 unsigned char GameClocki = 0;
 int TickFct_GameClockTick(int state){
-	if(!Game_Begin){
+	if(!Game_Begin || Game_Over){
 		return 0;
 	}
 	GameClocki++;
@@ -895,15 +897,16 @@ int TickFct_Joystick(int state){
 			Joystick_clock = 0;
 			Joystick_i = 0;
 			J_Over = 1;
+			Game_Over = 1;
+			Game_Won = 1;
 			break;
 	}
 	return state;
 }
 
 unsigned char GameOver_clock = 0;
-unsigned char Game_Over = 0;
-int TickFct_GameOver(int state){
-	if(!Game_Begin | Game_Over){
+int TickFct_GameEnd(int state){
+	if(!Game_Begin || !Game_Over){
 		return state;
 	}
 	switch(state){
@@ -912,7 +915,7 @@ int TickFct_GameOver(int state){
 				LCD_DisplayString(1, "Game Won");		
 			}
 			else if(Reset){
-				LCD(1, "Game Reset");
+				LCD_DisplayString(1, "Game Reset");
 			}
 			else{
 				LCD_DisplayString(1, "Game Lost");
@@ -932,6 +935,7 @@ int TickFct_GameOver(int state){
 		case GameOver_Reset:
 			state = GameOver_init;
 			break;
+	
 		}
 		switch(state){
 			case GameOver_init:
@@ -956,7 +960,9 @@ int TickFct_GameOver(int state){
 				Reset = 0;
 				break;
 		}
+		return state;
 }
+
 
 unsigned char Reset_Clock = 0;
 int TickFct_Reset(int state){
@@ -983,8 +989,7 @@ int TickFct_Reset(int state){
 			Reset_Clock = 0;
 			break;
 	}
-	
-	
+	return state;
 }
 
 
