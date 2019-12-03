@@ -175,7 +175,7 @@ char ADC_X(){
 //------------------------------------------------------------------------------------
 //----------------------------------TckFct & Enums//---------------------------------
 int TickFct_GameSart(int);
-typedef enum GameStart_States {GameStart_init, GameStart_Wait, GameStart_Start, GameStart_DeadState, GameStart_Wait2} GameStart_States;
+typedef enum GameStart_States {GameStart_init, GameStart_Wait, GameStart_Start, GameStart_DeadState, GameStart_Wait2, GameStart_HighScore} GameStart_States;
 
 int TickFct_PWMTick(int);
 typedef enum PWMTick_States {PWMTick_init, PWMTick_Press} PWMTick_States;
@@ -215,7 +215,7 @@ void WriteNumber(int);
 char NumberPattern(char);
 //-----------------------------------------------------------------------------------------
 //-----------------------------Global Vaiables---------------------------------------------
-unsigned short GameClock = 500;
+short GameClock = 100;
 unsigned char Game_Won = 0;
 unsigned char Reset = 0;
 unsigned char BombTick = 0;
@@ -362,6 +362,7 @@ int TickFct_GameSart(int state){
 	switch (state){
 		case GameStart_init:
 			state = ButtonA? GameStart_Wait: GameStart_init;
+			state = ButtonB? GameStart_HighScore: state;
 			/*if(ButtonA){
 				ChosenMode_temp = Easy;
 			}
@@ -369,6 +370,9 @@ int TickFct_GameSart(int state){
 				ChosenMode_temp = Medium;
 			}*/
 				
+			break;
+		case GameStart_HighScore:
+			state = GameStart_timer > 20? GameStart_init: GameStart_HighScore;
 			break;
 		case GameStart_Wait:
 			state = GameStart_timer > 30? GameStart_Start: GameStart_Wait;
@@ -382,16 +386,23 @@ int TickFct_GameSart(int state){
 	}
 	switch (state){
 		case GameStart_init:
-			LCD_DisplayString(1, "Defuse the bomb A to start");
+			LCD_DisplayString(1, "Defuse the bomb A: start B: HS");
+			GameStart_timer = 0;
 			break;
 		case GameStart_Wait:
 			GameStart_timer++;
-			LCD_DisplayString(1, "BombCode:       Black:6M47L1");
+			LCD_DisplayString(1, "BombCode:       Black:6M47L13");
+			break;
+		case GameStart_HighScore:
+			LCD_DisplayString(1, "HighScore");
+			WriteNumber(HighScore);
+			GameStart_timer++;
 			break;
 		case GameStart_Start:
 			LCD_ClearScreen();
 			ChosenMode = ChosenMode_temp;
 			Game_Begin = 1;
+			PWM_on();
 			state = GameStart_init;
 			GameStart_timer = 0;
 			break;
@@ -417,10 +428,10 @@ TickFct_PWMTick(int state){
 
 	switch (state){
 		case PWMTick_init:
-			state = Pressed? PWMTick_Press: PWMTick_init;
+			state = Pressed || Game_Lost? PWMTick_Press: PWMTick_init;
 			break;
 		case PWMTick_Press:
-			state = Pressed? PWMTick_Press: PWMTick_init;
+			state = Pressed || Game_Lost? PWMTick_Press: PWMTick_init;
 			break;
 	}
 	switch (state){
@@ -435,6 +446,9 @@ TickFct_PWMTick(int state){
 				set_PWM(261.63);
 			}			
 			else if(ButtonB){
+				set_PWM(293.66);
+			}
+			else if(Game_Lost){
 				set_PWM(293.66);
 			}
 			else{
@@ -600,8 +614,15 @@ char NumberPattern(char LCD_Number){
 unsigned char Questions_clock = 0;
 unsigned char Q_Over = 0;
 int TickFct_Questions(int state){
-	if(!Game_Begin | Q_Over){
+	if(Game_Lost || Reset){
+		Questions_clock = 0;
+		state = Questions_init;
+	}
+	if(!Game_Begin | Q_Over | Game_Lost){
 		return state;
+	}
+	if(Game_Lost){
+		return Questions_init;
 	}
 	
 	switch (state){
@@ -634,7 +655,7 @@ int TickFct_Questions(int state){
 			Questions_clock++;
 			break;	
 		case Questions_Answer:
-			LCD_DisplayString(1, "A: M    B: J    C: 4");
+			LCD_DisplayString(1, "A: 3    B: 4    C: M");
 			break;
 		case Questions_Check:
 			if(ButtonB | ButtonC){
@@ -657,8 +678,15 @@ int TickFct_Questions(int state){
 unsigned char Questions_clock_two = 0;
 unsigned char Q_Over_two = 0;
 int TickFct_Questions_two(int state){
-	if(!Q_Over | Q_Over_two | !Game_Begin){
+	if(Game_Lost || Reset){
+		Questions_clock_two = 0;
+		state = Questions_init_two;
+	}
+	if(!Q_Over | Q_Over_two | !Game_Begin | Game_Lost){
 		return state;
+	}
+	if(Game_Lost){
+		return Questions_init_two;
 	}
 	
 	switch (state){
@@ -714,8 +742,15 @@ int TickFct_Questions_two(int state){
 unsigned char Questions_clock_three = 0;
 unsigned char Q_Over_three = 0;
 int TickFct_Questions_three(int state){
-	if(!Game_Begin | Q_Over_three | !Q_Over_two){
+	if(Game_Lost || Reset){
+		state = Questions_init_three;
+		Questions_clock_three = 0;
+	}
+	if(!Game_Begin | Q_Over_three | !Q_Over_two | Game_Lost){
 		return state;
+	}
+	if(Game_Lost){
+		return Questions_init_three;
 	}
 	
 	switch (state){
@@ -776,9 +811,17 @@ unsigned char Mary_clock = 0;
 unsigned char M_Over = 0;
 unsigned char Mary_i = 0;
 int TickFct_Mary(int state){
+	if(Game_Lost || Reset){
+		Mary_clock = 0;
+		Mary_i = 0;
+		state = Mary_init;
+	}
 	unsigned char Pressed = ButtonA + ButtonB + ButtonC;
-	if(!Game_Begin | !Q_Over_three | M_Over){
+	if(!Game_Begin | !Q_Over_three | M_Over | Game_Lost){
 		return state;
+	}
+	if(Game_Lost){
+		return Mary_init;
 	}
 	switch (state){
 		case Mary_init:
@@ -821,6 +864,7 @@ int TickFct_Mary(int state){
 			else{
 				LCD_DisplayString(1, "Error!!!");
 				GameClock = GameClock - 10;
+				Mary_i = 0;
 				state = Mary_waitS;
 				Mary_clock = 0;
 			}
@@ -828,8 +872,8 @@ int TickFct_Mary(int state){
 		case Mary_Over:
 			Mary_clock = 0;
 			Mary_i = 0;
+			state = Mary_init;
 			M_Over = 1;
-			Game_Won = 1;
 			break;
 	}
 	return state;
@@ -842,9 +886,18 @@ unsigned char Joystick_clock = 0;
 unsigned char J_Over = 0;
 unsigned char Joystick_i = 0;
 int TickFct_Joystick(int state){
-	if(!Game_Begin | !M_Over | J_Over){
+	if(Game_Lost || Reset){
+		state = Joystick_init;
+		Joystick_clock = 0;
+		Joystick_i = 0;
+	}
+	if(!Game_Begin | !M_Over | J_Over | Game_Lost){
 		return state;
 	}
+	if(Game_Lost){LCD_DisplayString(1, "New HighScore");
+		return Joystick_init;
+	}
+	
 	unsigned char Moved = ADC_X();
 	
 	switch (state){
@@ -897,6 +950,7 @@ int TickFct_Joystick(int state){
 			Joystick_clock = 0;
 			Joystick_i = 0;
 			J_Over = 1;
+			state = Joystick_init;
 			Game_Over = 1;
 			Game_Won = 1;
 			break;
@@ -911,26 +965,30 @@ int TickFct_GameEnd(int state){
 	}
 	switch(state){
 		case GameOver_init:
-			if(Game_Won){
-				LCD_DisplayString(1, "Game Won");		
+			if(Game_Won && !Game_Lost && !Reset){
+				LCD_DisplayString(1, "Bomb Defused");		
 			}
 			else if(Reset){
 				LCD_DisplayString(1, "Game Reset");
 			}
 			else{
-				LCD_DisplayString(1, "Game Lost");
+				LCD_DisplayString(1, "BOOOM!!!");
 			}
 			state = GameOver_clock > 15? GameOver_HighScore: GameOver_init;
 			break;
 		case GameOver_HighScore:
-			if(GameClock > HighScore && !Reset){
+			if((GameClock > HighScore) && Game_Won){
 				state = GameOver_wait;
+				HighScore = GameClock;
+				LCD_DisplayString(1, "New HighScore");
 			}
-			else{
+			else{	
+
 				state = GameOver_Reset;
 			}
 		case GameOver_wait:
 			state = GameOver_clock > 15? GameOver_Reset: GameOver_wait;
+			WriteNumber(GameClock);
 			break;
 		case GameOver_Reset:
 			state = GameOver_init;
@@ -939,24 +997,27 @@ int TickFct_GameEnd(int state){
 		}
 		switch(state){
 			case GameOver_init:
-			break;
+				GameOver_clock++;
+				break;
 			case GameOver_HighScore:
 				GameOver_clock = 0;
-			break;
+				break;
 			case GameOver_wait:
 				GameOver_clock++;
-			break;
+				break;
 			case GameOver_Reset:
 				Q_Over_three = 0;
 				Q_Over_two = 0;
+				PWM_oFF();
 				Q_Over = 0;
 				M_Over = 0;
 				J_Over = 0;
-				GameClock = 500;
+				GameClock = 100;
 				Game_Begin = 0;
 				Game_Over = 0;
 				GameOver_clock = 0;
-				Game_Won = 0; 
+				Game_Won = 0;
+				Game_Lost = 0; 
 				Reset = 0;
 				break;
 		}
@@ -985,8 +1046,12 @@ int TickFct_Reset(int state){
 			Reset_Clock++;
 			break;		
 		case Reset_Reset:
+			Game_Begin = 1;
 			Reset = 1;
+			Game_Over = 1;
 			Reset_Clock = 0;
+			GameClock = 0;
+			HighScore = 0;
 			break;
 	}
 	return state;
@@ -995,8 +1060,9 @@ int TickFct_Reset(int state){
 
 
 int TickFct_Lost(int state){
-	if(GameClock == 0){
+	if(GameClock <= 0){
 		Game_Lost = 1;
+		Game_Over = 1;
 	}
 	return state;
 }
