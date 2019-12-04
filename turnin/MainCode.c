@@ -172,6 +172,29 @@ char ADC_X(){
 	}
 }
 
+
+
+unsigned char SmileChar[8] = {
+	0b00000,
+	0b00000,
+	0b01010,
+	0b00000,
+	0b10001,
+	0b01010,
+	0b00100,
+	0b00000
+};
+
+void LCD_addChar(unsigned char *icon) {
+	LCD_WriteCommand(0x40);
+	int i;
+	for (i = 0; i < 8; i++) {
+		LCD_WriteData(icon[i]);
+	}
+	LCD_WriteCommand(0x80);
+}
+
+
 //------------------------------------------------------------------------------------
 //----------------------------------TckFct & Enums//---------------------------------
 int TickFct_GameSart(int);
@@ -981,6 +1004,9 @@ int TickFct_GameEnd(int state){
 				state = GameOver_wait;
 				HighScore = GameClock;
 				LCD_DisplayString(1, "New HighScore");
+				LCD_addChar(SmileChar);
+				LCD_Cursor(17);
+				LCD_WriteData(0);
 			}
 			else{	
 
