@@ -375,10 +375,16 @@ int main(void) {
 }
 //----------------------------------------------------------------------------
 //------------------------------GameStart SM---------------------------------
+unsigned char LCD_ONE = 0;
 unsigned char GameStart_timer = 0;
 GameMode ChosenMode_temp;
 unsigned char Game_Begin = 0;
 int TickFct_GameSart(int state){
+	if(Reset){
+		LCD_ONE = 0;
+		GameStart_timer = 0;
+		state = GameStart_init;
+	}
 	if(Game_Begin){
 		return state;
 	}
@@ -386,6 +392,9 @@ int TickFct_GameSart(int state){
 		case GameStart_init:
 			state = ButtonA? GameStart_Wait: GameStart_init;
 			state = ButtonB? GameStart_HighScore: state;
+			if(state == GameStart_Wait){
+				LCD_DisplayString(1, "BombCode:       Black:6M47L13");
+			}
 			/*if(ButtonA){
 				ChosenMode_temp = Easy;
 			}
@@ -409,15 +418,20 @@ int TickFct_GameSart(int state){
 	}
 	switch (state){
 		case GameStart_init:
-			LCD_DisplayString(1, "Defuse the bomb A: start B: HS");
+			if(!LCD_ONE){
+				LCD_ONE = 1;
+				LCD_DisplayString(1, "Defuse the bomb A: start B: HS");
+			}
 			GameStart_timer = 0;
 			break;
 		case GameStart_Wait:
+			LCD_ONE = 0;
 			GameStart_timer++;
-			LCD_DisplayString(1, "BombCode:       Black:6M47L13");
+			//LCD_DisplayString(1, "BombCode:       Black:6M47L13");
 			break;
 		case GameStart_HighScore:
 			LCD_DisplayString(1, "HighScore");
+			LCD_ONE = 0;
 			WriteNumber(HighScore);
 			GameStart_timer++;
 			break;
@@ -654,7 +668,7 @@ int TickFct_Questions(int state){
 			state = Questions_wait;
 			break;
 		case Questions_wait:
-			state = Questions_clock > 15? Questions_Answer: Questions_wait;
+			state = Questions_clock > 13? Questions_Answer: Questions_wait;
 			break;
 		case Questions_Answer:
 			state = Questions_Check;
@@ -926,7 +940,7 @@ int TickFct_Joystick(int state){
 	switch (state){
 		case Joystick_init:
 			LCD_DisplayString(1, "Left Right Left Left Right Left");
-			state = Joystick_clock < 5? Joystick_init: Joystick_Answer;
+			state = Joystick_clock < 7? Joystick_init: Joystick_Answer;
 			break;
 		case Joystick_Answer:
 			Joystick_clock = 0; 
@@ -945,6 +959,7 @@ int TickFct_Joystick(int state){
 			break;
 		case Joystick_waitS:
 			state = Joystick_clock > 7? Joystick_init: Joystick_waitS;
+			Joystick_clock = Joystick_clock > 7? 3: Joystick_clock;
 	}	
 	switch (state){
 		case Joystick_init:
@@ -990,6 +1005,7 @@ int TickFct_GameEnd(int state){
 		case GameOver_init:
 			if(Game_Won && !Game_Lost && !Reset){
 				LCD_DisplayString(1, "Bomb Defused");		
+				PWM_oFF();
 			}
 			else if(Reset){
 				LCD_DisplayString(1, "Game Reset");
